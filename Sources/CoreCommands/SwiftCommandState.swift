@@ -907,7 +907,8 @@ public final class SwiftCommandState {
     private func _buildParams(
         toolchain: UserToolchain,
         destination: BuildParameters.Destination,
-        prepareForIndexing: Bool
+        prepareForIndexing: Bool,
+        noCodegen: Bool = false
     ) throws -> BuildParameters {
         let triple = toolchain.targetTriple
 
@@ -920,10 +921,14 @@ public final class SwiftCommandState {
         }
 
         let prepareForIndexingMode: BuildParameters.PrepareForIndexingMode =
-            switch (prepareForIndexing, self.options.build.prepareForIndexingNoLazy) {
-            case (false, _): .off
-            case (true, false): .on
-            case (true, true): .noLazy
+            if noCodegen {
+                .noCodegen
+            } else {
+                switch (prepareForIndexing, self.options.build.prepareForIndexingNoLazy) {
+                case (false, _): .off
+                case (true, false): .on
+                case (true, true): .noLazy
+                }
             }
 
         return try BuildParameters(
@@ -1007,7 +1012,8 @@ public final class SwiftCommandState {
         try self._buildParams(
             toolchain: self.getTargetToolchain(),
             destination: .target,
-            prepareForIndexing: self.options.build.prepareForIndexing
+            prepareForIndexing: self.options.build.prepareForIndexing,
+            noCodegen: self.options.build.experimentalNoCodegen
         )
     })
 

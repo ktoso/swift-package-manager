@@ -26,6 +26,10 @@ public struct BuildParameters: Encodable {
         case noLazy
         /// Do minimal build to prepare for indexing
         case on
+        /// Full type checking with module emission but no codegen or linking.
+        /// Unlike `.on`/`.noLazy`, does NOT skip function bodies and does NOT
+        /// allow modules with compiler errors.
+        case noCodegen
     }
 
     /// Mode for the indexing-while-building feature.

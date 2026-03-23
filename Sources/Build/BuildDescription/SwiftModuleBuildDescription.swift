@@ -589,7 +589,7 @@ public final class SwiftModuleBuildDescription {
         }
 
         switch self.buildParameters.prepareForIndexing {
-        case .off:
+        case .off, .noCodegen:
             break
         case .on:
             args += ["-Xfrontend", "-experimental-lazy-typecheck",]
@@ -789,7 +789,9 @@ public final class SwiftModuleBuildDescription {
             result.append(outputFileMapPath.pathString)
         }
 
-        result.append("-c")
+        if self.buildParameters.prepareForIndexing == .off {
+            result.append("-c")
+        }
         result.append(contentsOf: self.sources.map(\.pathString))
 
         result.append("-I")

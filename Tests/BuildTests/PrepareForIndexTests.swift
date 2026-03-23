@@ -241,4 +241,88 @@ class PrepareForIndexTests: XCTestCase {
         // for the prepare builds.
         XCTAssertEqual(try state.toolsBuildParameters.prepareForIndexing, .off)
     }
+
+    func testNoCodegen() async throws {
+        try XCTSkipOnWindows(because: "coreCommands.count = 0 instead of 1. Possibly related to https://github.com/swiftlang/swift-package-manager/issues/8511")
+
+        let (graph, fs, scope) = try macrosPackageGraph()
+
+        let plan = try await BuildPlan(
+            destinationBuildParameters: mockBuildParameters(destination: .target, prepareForIndexing: .noCodegen),
+            toolsBuildParameters: mockBuildParameters(destination: .host, prepareForIndexing: .off),
+            graph: graph,
+            fileSystem: fs,
+            observabilityScope: scope
+        )
+
+        let builder = LLBuildManifestBuilder(plan, fileSystem: fs, observabilityScope: scope)
+        let manifest = try builder.generateManifest(at: "/manifest")
+
+        // Make sure we're building the swift modules
+        let outputs = manifest.commands.flatMap(\.value.tool.outputs).map(\.name)
+        XCTAssertTrue(outputs.contains(where: { $0.hasSuffix(".swiftmodule") }))
+
+        // Ensure swiftmodules built with correct arguments (no body-skipping or error-allowing flags)
+        let coreCommands = manifest.commands.values.filter {
+            $0.tool.outputs.contains(where: {
+                $0.name.hasSuffix("debug/Core.build/Core.swiftmodule")
+            })
+        }
+        XCTAssertEqual(coreCommands.count, 1)
+        let coreSwiftc = try XCTUnwrap(coreCommands.first?.tool as? SwiftCompilerTool)
+        XCTAssertFalse(coreSwiftc.otherArguments.contains("-experimental-skip-all-function-bodies"))
+        XCTAssertFalse(coreSwiftc.otherArguments.contains("-experimental-allow-module-with-compiler-errors"))
+        XCTAssertFalse(coreSwiftc.otherArguments.contains("-experimental-lazy-typecheck"))
+
+        // Ensure tools are built normally
+        let toolCommands = manifest.commands.values.filter {
+            $0.tool.outputs.contains(where: {
+                $0.name.hasSuffix("debug/Modules-tool/SwiftSyntax.swiftmodule")
+            })
+        }
+        XCTAssertEqual(toolCommands.count, 1)
+        let toolSwiftc = try XCTUnwrap(toolCommands.first?.tool as? SwiftCompilerTool)
+        XCTAssertFalse(toolSwiftc.otherArguments.contains("-experimental-skip-all-function-bodies"))
+        XCTAssertTrue(toolSwiftc.outputs.contains(where: {
+            $0.name.hasSuffix(".swift.o")
+        }))
+
+        // Make sure only object files for tools are built (no .o for destination targets)
+        XCTAssertTrue(
+            outputs.filter { $0.hasSuffix(".o") }.allSatisfy { $0.contains("-tool.build/") },
+            "outputs:\n\t\(outputs.filter { $0.hasSuffix(".o") }.joined(separator: "\n\t"))"
+        )
+    }
+
+    func testNoCodegenToolsDontPrepare() throws {
+        let options = try GlobalOptions.parse(["--experimental-no-codegen"])
+        let state = try SwiftCommandState(
+            outputStream: stderrStream,
+            options: options,
+            toolWorkspaceConfiguration: .init(shouldInstallSignalHandlers: false),
+            workspaceDelegateProvider: {
+                CommandWorkspaceDelegate(
+                    observabilityScope: $0,
+                    outputHandler: $1,
+                    progressHandler: $2,
+                    inputHandler: $3
+                )
+            },
+            workspaceLoaderProvider: {
+                XcodeWorkspaceLoader(
+                    fileSystem: $0,
+                    observabilityScope: $1
+                )
+            },
+            createPackagePath: false,
+            hostTriple: .arm64Linux,
+            fileSystem: localFileSystem,
+            environment: .current
+        )
+
+        XCTAssertEqual(try state.productsBuildParameters.prepareForIndexing, .noCodegen)
+        // Tools builds should never do prepare for indexing since they're needed
+        // for the prepare builds.
+        XCTAssertEqual(try state.toolsBuildParameters.prepareForIndexing, .off)
+    }
 }

@@ -522,6 +522,10 @@ public struct BuildOptions: ParsableArguments {
     @Flag(name: .customLong("experimental-prepare-for-indexing-no-lazy"), help: .hidden)
     var prepareForIndexingNoLazy: Bool = false
 
+    /// Perform full type checking and emit modules, but skip codegen and linking.
+    @Flag(name: .customLong("experimental-no-codegen"), help: .hidden)
+    var experimentalNoCodegen: Bool = false
+
     /// Hidden option to allow XCFrameworks on Linux
     @Flag(
         name: .customLong("experimental-xcframeworks-on-linux"),
